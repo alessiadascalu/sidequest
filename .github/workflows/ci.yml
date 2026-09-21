@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # Pe Windows fișierul poate fi comis fără bitul de execuție.
+      - name: Make Maven Wrapper executable
+        run: chmod +x mvnw
+
+      - name: Run tests
+        run: ./mvnw -B test

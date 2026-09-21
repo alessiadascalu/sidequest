@@ -1,0 +1,267 @@
+.app {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.app-header {
+  text-align: center;
+}
+
+.app-header h1 {
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+  color: var(--primary);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.center {
+  text-align: center;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+}
+
+.greeting {
+  font-size: 1.05rem;
+}
+
+/* ---------- Butoane ---------- */
+
+button.primary {
+  background: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  border-radius: 999px;
+  padding: 0.7rem 1.6rem;
+  font-weight: 700;
+  font-size: 1rem;
+  transition: background 0.15s, transform 0.1s;
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+button.primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+button.link {
+  align-self: center;
+  background: none;
+  border: none;
+  color: var(--muted);
+  text-decoration: underline;
+  font-size: 0.85rem;
+}
+
+/* ---------- Quest ---------- */
+
+.quest {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.quest.is-done {
+  border-color: var(--success);
+}
+
+.quest-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.badge {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.badge.difficulty.easy {
+  color: var(--easy);
+}
+
+.badge.difficulty.medium {
+  color: var(--medium);
+}
+
+.badge.difficulty.hard {
+  color: var(--hard);
+}
+
+.quest-text {
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.quest-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.reward {
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.done-note {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.reward-toast {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border-color: var(--accent);
+  animation: pop 0.35s ease-out;
+}
+
+.level-up {
+  margin-top: 0.4rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.94);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ---------- Streak + XP ---------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 1rem;
+}
+
+@media (max-width: 460px) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+.streak {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.streak-flame {
+  font-size: 2.2rem;
+}
+
+.streak-count {
+  font-size: 2rem;
+  line-height: 1;
+  margin-right: 0.35rem;
+}
+
+.streak-label {
+  font-weight: 600;
+}
+
+.xp {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  justify-content: center;
+}
+
+.xp-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.xp-title {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.xp-bar {
+  height: 14px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.xp-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xp-fill,
+  .reward-toast {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* ---------- Onboarding + erori ---------- */
+
+.onboarding {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.onboarding input {
+  font: inherit;
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.onboarding label {
+  font-weight: 600;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.error {
+  color: var(--danger);
+  font-weight: 600;
+}

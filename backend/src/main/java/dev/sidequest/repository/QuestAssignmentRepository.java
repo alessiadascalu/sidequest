@@ -1,0 +1,23 @@
+package dev.sidequest.repository;
+
+import dev.sidequest.domain.QuestAssignment;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+public interface QuestAssignmentRepository extends JpaRepository<QuestAssignment, Long> {
+
+    Optional<QuestAssignment> findByUserIdAndLocalDate(Long userId, LocalDate localDate);
+
+    @Query("select a.localDate from QuestAssignment a where a.user.id = :userId and a.completedAt is not null")
+    List<LocalDate> findCompletedDates(@Param("userId") Long userId);
+
+    @Query("select a.quest.id from QuestAssignment a where a.user.id = :userId")
+    List<Long> findAssignedQuestIds(@Param("userId") Long userId);
+
+    long countByUserIdAndCompletedAtIsNotNull(Long userId);
+}
