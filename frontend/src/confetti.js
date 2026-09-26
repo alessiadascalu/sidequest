@@ -12,6 +12,12 @@ export function celebrateQuest() {
   )
 }
 
+/** Locul 1 în grup: ploaie aurie de sus. */
+export function celebrateTopSpot() {
+  const GOLD = ['#fff3b0', '#ffd166', '#f5a623', '#ffe66d']
+  confetti({ ...base, colors: GOLD, shapes: ['star', 'circle'], particleCount: 90, spread: 100, startVelocity: 35, gravity: 0.8, origin: { y: 0.3 } })
+}
+
 export function celebrateLevelUp() {
   // Două tunuri din lateral + o ploaie de stele din mijloc.
   const cannon = (x, angle) =>

@@ -3,15 +3,14 @@ package dev.sidequest.web;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.sidequest.support.MutableClock;
+import dev.sidequest.support.TestClockConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
@@ -50,6 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /** Teste cap-coadă (HTTP -> servicii -> H2 în memorie), cu timpul controlat de un Clock mutabil. */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(TestClockConfig.class)
 class SideQuestApiTest {
 
     static final ZoneId BUCHAREST = ZoneId.of("Europe/Bucharest");
@@ -57,22 +57,13 @@ class SideQuestApiTest {
     static final ZoneId LOS_ANGELES = ZoneId.of("America/Los_Angeles");
     static final AtomicInteger USERS = new AtomicInteger();
 
-    @TestConfiguration
-    static class TestClockConfig {
-        @Bean
-        @Primary
-        MutableClock testClock() {
-            return new MutableClock(Instant.parse("2026-06-10T09:00:00Z"));
-        }
-    }
-
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired MutableClock clock;
 
     @BeforeEach
     void resetClock() {
-        clock.set(Instant.parse("2026-06-10T09:00:00Z"));
+        clock.set(TestClockConfig.START);
     }
 
     // ---------- helpers ----------

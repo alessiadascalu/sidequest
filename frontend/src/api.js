@@ -48,5 +48,18 @@ export const getProfile = (userId) => request(`/users/${userId}/profile`)
 
 export const getHistory = (userId) => request(`/users/${userId}/history`)
 
+// ---------- Grupuri ----------
+
+export const createGroup = (name, creatorUserId) =>
+  request('/groups', { method: 'POST', body: JSON.stringify({ name, creatorUserId: Number(creatorUserId) }) })
+
+/** 404 = cod inexistent, 409 = ești deja membru. */
+export const joinGroup = (userId, inviteCode) =>
+  request('/groups/join', { method: 'POST', body: JSON.stringify({ userId: Number(userId), inviteCode }) })
+
+export const getUserGroups = (userId) => request(`/users/${userId}/groups`)
+
+export const getLeaderboard = (groupId) => request(`/groups/${groupId}/leaderboard`)
+
 /** URL-urile de poze vin relative la API ("/uploads/..."). */
 export const imageSrc = (url) => (url ? `${BASE}${url}` : null)

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ApiError, completeTodayQuest, getProfile, getTodayQuest } from '../api.js'
 import { celebrateQuest } from '../confetti.js'
 import { LevelUpOverlay, RewardPop } from './Celebrations.jsx'
+import GroupsTab from './GroupsTab.jsx'
 import HistoryTab from './HistoryTab.jsx'
 import Lightbox from './Lightbox.jsx'
 import Mascot from './Mascot.jsx'
@@ -13,10 +14,24 @@ import Stats from './Stats.jsx'
 const TABS = [
   { id: 'today', label: '⚡ Azi' },
   { id: 'history', label: '📜 Istoric' },
+  { id: 'groups', label: '👥 Grupuri' },
 ]
+
+// Ecranul nou intră din direcția tab-ului apăsat, cel vechi iese în partea opusă.
+const SLIDE = {
+  enter: (dir) => ({ opacity: 0, x: 40 * dir }),
+  center: { opacity: 1, x: 0 },
+  exit: (dir) => ({ opacity: 0, x: -40 * dir }),
+}
 
 export default function Home({ userId, initialProfile, welcome, onLogout }) {
   const [tab, setTab] = useState('today')
+  const [direction, setDirection] = useState(1)
+  const selectTab = (id) => {
+    const index = (t) => TABS.findIndex((x) => x.id === t)
+    setDirection(index(id) >= index(tab) ? 1 : -1)
+    setTab(id)
+  }
   const [profile, setProfile] = useState(initialProfile ?? null)
   const [today, setToday] = useState(null)
   const [error, setError] = useState(null)
@@ -149,7 +164,7 @@ export default function Home({ userId, initialProfile, welcome, onLogout }) {
             className="tab"
             role="tab"
             aria-selected={tab === t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => selectTab(t.id)}
             whileTap={{ scale: 0.94 }}
           >
             {tab === t.id && (
@@ -160,23 +175,26 @@ export default function Home({ userId, initialProfile, welcome, onLogout }) {
         ))}
       </nav>
 
-      <AnimatePresence mode="wait" initial={false}>
+      {/* custom: direcția (1 = spre dreapta în bară), citită și de ecranul care iese */}
+      <AnimatePresence mode="wait" initial={false} custom={direction}>
         <motion.div
           key={tab}
           className="screen"
-          initial={{ opacity: 0, x: tab === 'history' ? 40 : -40 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: tab === 'history' ? -40 : 40 }}
+          custom={direction}
+          variants={SLIDE}
+          initial="enter"
+          animate="center"
+          exit="exit"
           transition={{ duration: 0.25, ease: 'easeOut' }}
         >
-          {tab === 'today' ? (
+          {tab === 'today' && (
             <>
               <QuestCard today={today} onComplete={() => setSheetOpen(true)} onOpenImage={setImage} />
               <Stats profile={profile} />
             </>
-          ) : (
-            <HistoryTab userId={userId} onOpenImage={setImage} />
           )}
+          {tab === 'history' && <HistoryTab userId={userId} onOpenImage={setImage} />}
+          {tab === 'groups' && <GroupsTab userId={userId} onToast={setToast} />}
         </motion.div>
       </AnimatePresence>
 

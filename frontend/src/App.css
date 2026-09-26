@@ -203,7 +203,7 @@
 
 .tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 5px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.05);
@@ -214,11 +214,12 @@
   position: relative;
   border: none;
   background: none;
-  padding: 0.7rem 1rem;
+  padding: 0.7rem 0.4rem;
   border-radius: 999px;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: clamp(0.74rem, 3.2vw, 0.88rem);
+  white-space: nowrap;
   color: var(--muted);
   transition: color 0.2s;
 }
@@ -948,6 +949,408 @@
   }
 }
 
+/* ---------- Grupuri ---------- */
+
+.btn-sm {
+  padding: 0.5rem 0.9rem;
+  font-size: 0.78rem;
+}
+
+.text-input.plain {
+  padding-left: 1.1rem;
+  font-size: 1.05rem;
+}
+
+.code-input {
+  font-family: var(--font-display);
+  letter-spacing: 0.3em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.groups-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: center;
+  padding: 0.5rem 0.5rem 0.25rem;
+}
+
+.groups-hero h2 {
+  font-size: clamp(1.35rem, 6vw, 1.75rem);
+  font-weight: 900;
+}
+
+.group-forms {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.group-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.group-form h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.form-emoji {
+  font-size: 1.9rem;
+  line-height: 1;
+}
+
+.or {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--faint);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.or::before,
+.or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.group-chips {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  /* overflow-x taie și pe verticală: lăsăm loc pentru glow-ul chip-ului selectat */
+  padding: 4px 2px 16px;
+  margin: -4px -2px -12px;
+  scrollbar-width: none;
+}
+
+.group-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.group-chip {
+  position: relative;
+  flex: none;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  padding: 0.6rem 1rem;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--muted);
+  white-space: nowrap;
+  max-width: 70vw;
+}
+
+.group-chip .tab-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.group-chip[aria-selected='true'] {
+  color: #fff;
+  border-color: transparent;
+}
+
+.group-chip small {
+  opacity: 0.75;
+  font-weight: 600;
+}
+
+.group-chip-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--grad-main);
+  box-shadow: 0 6px 16px -6px rgba(139, 92, 255, 0.7);
+  z-index: 0;
+}
+
+.group-chip.add {
+  width: 42px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+  font-weight: 400;
+  color: var(--text);
+  border-style: dashed;
+}
+
+.group-chip.add.open {
+  border-color: var(--pink);
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.2rem;
+}
+
+.group-title {
+  font-size: 1.3rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.group-code {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.code-mini {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  padding: 0.35rem 0.7rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+}
+
+.invite-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  border-color: rgba(255, 79, 216, 0.4);
+  box-shadow: var(--glow-pink);
+}
+
+.invite-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.invite-head h3 {
+  font-size: 1.2rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.code-tiles {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.4rem;
+  perspective: 600px;
+}
+
+.code-tile {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 3 / 4;
+  max-height: 72px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #2b2342, #1a1628);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.35), 0 8px 20px -10px rgba(255, 79, 216, 0.6);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(1.4rem, 7vw, 2rem);
+}
+
+.invite-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.invite-actions .btn {
+  flex: 1 1 auto;
+  padding-inline: 1.1rem;
+  white-space: nowrap;
+}
+
+/* ---------- Leaderboard ---------- */
+
+.leaderboard {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius);
+}
+
+.lb-rank {
+  flex: none;
+  width: 30px;
+  text-align: center;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.lb-rank-num {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1rem;
+  color: var(--faint);
+}
+
+.lb-trophy {
+  display: inline-block;
+  filter: drop-shadow(0 0 10px rgba(255, 209, 102, 0.8));
+}
+
+.lb-avatar-wrap {
+  position: relative;
+  flex: none;
+}
+
+.lb-avatar {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.2rem;
+  color: #0c0a14;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35);
+}
+
+.lb-crown {
+  position: absolute;
+  top: -17px;
+  left: -8px;
+  font-size: 1.3rem;
+  filter: drop-shadow(0 2px 6px rgba(255, 209, 102, 0.8));
+}
+
+.lb-who {
+  flex: 1;
+  min-width: 0;
+}
+
+.lb-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.lb-username {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-you {
+  flex: none;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--violet);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.lb-level {
+  font-size: 0.78rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-stats {
+  flex: none;
+  text-align: right;
+}
+
+.lb-xp {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.lb-xp small {
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.lb-streak {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--orange);
+}
+
+.lb-streak.off {
+  color: var(--faint);
+}
+
+.lb-today {
+  color: var(--lime);
+}
+
+/* Utilizatorul curent: contur violet */
+.lb-me {
+  border-color: rgba(139, 92, 255, 0.75);
+  background: linear-gradient(180deg, rgba(139, 92, 255, 0.22), rgba(139, 92, 255, 0.08));
+  box-shadow: 0 0 0 1px rgba(139, 92, 255, 0.4), var(--glow-violet);
+}
+
+/* Locul 1: auriu, cu luciu care trece peste card */
+.lb-first {
+  border-color: rgba(255, 209, 102, 0.7);
+  background: linear-gradient(135deg, rgba(255, 209, 102, 0.2), rgba(245, 166, 35, 0.06) 60%), var(--surface);
+  box-shadow: 0 12px 40px -12px rgba(255, 209, 102, 0.65);
+  overflow: hidden;
+}
+
+.lb-first::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 243, 176, 0.18) 50%, transparent 70%);
+  background-size: 250% 100%;
+  animation: shine 3.2s linear infinite;
+  pointer-events: none;
+}
+
+.lb-first .lb-xp {
+  background: var(--grad-gold);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.lb-first .lb-avatar {
+  box-shadow: 0 0 0 3px var(--gold), 0 0 20px rgba(255, 209, 102, 0.6);
+}
+
+.lb-first.lb-me {
+  border-color: var(--gold);
+}
+
 /* ---------- Lightbox ---------- */
 
 .lightbox {
@@ -982,6 +1385,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .xp-fill::after,
+  .lb-first::after,
   .skeleton {
     animation: none;
   }

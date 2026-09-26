@@ -1,9 +1,12 @@
 package dev.sidequest.web;
 
+import dev.sidequest.domain.Group;
 import dev.sidequest.domain.Proof;
 import dev.sidequest.domain.Quest;
 import dev.sidequest.domain.QuestAssignment;
 import dev.sidequest.domain.User;
+import dev.sidequest.group.GroupSummary;
+import dev.sidequest.group.LeaderboardEntry;
 import dev.sidequest.service.CompletionResult;
 import dev.sidequest.service.LoginResult;
 import dev.sidequest.service.Profile;
@@ -12,6 +15,7 @@ import dev.sidequest.streak.StreakResult;
 import dev.sidequest.xp.LevelInfo;
 import dev.sidequest.xp.XpAward;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -138,6 +142,66 @@ public final class Dtos {
             User u = profile.user();
             return new ProfileResponse(u.getId(), u.getUsername(), u.getZoneId().getId(), u.getTotalXp(),
                     profile.completedQuests(), LevelDto.from(profile.level()), StreakDto.from(profile.streak()));
+        }
+    }
+
+    // ---------- Grupuri ----------
+
+    public record CreateGroupRequest(
+            @NotBlank(message = "grupul are nevoie de un nume")
+            @Size(max = Group.MAX_NAME_LENGTH, message = "numele grupului poate avea cel mult 40 de caractere")
+            String name,
+
+            @NotNull
+            Long creatorUserId) {
+    }
+
+    public record JoinGroupRequest(
+            @NotNull
+            Long userId,
+
+            @NotBlank(message = "scrie codul de invitație")
+            @Size(max = 20)
+            String inviteCode) {
+    }
+
+    /** @param joinedAt când a intrat în grup utilizatorul pentru care s-a făcut cererea */
+    public record GroupDto(
+            Long id,
+            String name,
+            String inviteCode,
+            Instant createdAt,
+            Long creatorUserId,
+            long memberCount,
+            Instant joinedAt) {
+        static GroupDto from(GroupSummary summary) {
+            Group g = summary.group();
+            return new GroupDto(g.getId(), g.getName(), g.getInviteCode(), g.getCreatedAt(),
+                    g.getCreatorUserId(), summary.memberCount(), summary.joinedAt());
+        }
+
+        static List<GroupDto> from(List<GroupSummary> summaries) {
+            return summaries.stream().map(GroupDto::from).toList();
+        }
+    }
+
+    /** @param streak streak-ul curent, calculat în fusul orar al membrului */
+    public record LeaderboardEntryDto(
+            int rank,
+            Long userId,
+            String username,
+            int totalXp,
+            int level,
+            String title,
+            int streak,
+            boolean completedToday) {
+        static LeaderboardEntryDto from(LeaderboardEntry e) {
+            return new LeaderboardEntryDto(e.rank(), e.user().getId(), e.user().getUsername(), e.user().getTotalXp(),
+                    e.level().level(), e.level().title(), e.streak().current(), e.streak().completedToday());
+        }
+
+        static List<LeaderboardEntryDto> from(List<LeaderboardEntry> board) {
+            return board.stream().map(LeaderboardEntryDto::from).toList();
         }
     }
 

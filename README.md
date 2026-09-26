@@ -4,6 +4,12 @@ O mini-misiune pe zi. Primești un quest scurt și amuzant (în română), îl b
 
 Fără parolă: **username-ul e contul**. Dacă scrii un username care există deja, intri direct în contul lui, cu tot cu XP, streak și istoric. Dacă nu există, se creează. Aplicația ține minte id-ul în `localStorage`.
 
+## Ce e nou în Faza 2: grupuri
+
+- **Grupuri cu prietenii:** creezi un grup și primești un **cod de invitație** de 6 caractere, pe care îl trimiți prietenilor. Ei intră în grup cu codul. Un utilizator poate fi în oricâte grupuri.
+- **Leaderboard pe grup:** membrii sortați după XP total, cu nivel, titlu și streak-ul curent. Locul 1 primește coroană, trofeu și card auriu, iar tu ești evidențiat cu violet. Dacă ești pe locul 1 într-un grup cu concurență, te întâmpină o ploaie de confetti aurii.
+- **Tab nou „Grupuri”:** fără grupuri vezi cele două opțiuni („Creează un grup” / „Alătură-te unui grup”). Cu grupuri, le alegi dintr-o listă și vezi leaderboard-ul. După creare, codul apare mare, cu buton de copiere (și de „Trimite”, pe telefoanele care suportă share).
+
 ## Ce e nou în Faza 1
 
 - **Fix login:** `POST /users` nu mai răspunde cu `409 username deja luat`. Username existent (indiferent de majuscule) → `200` cu datele utilizatorului; username nou → `201` cu contul creat.
@@ -34,7 +40,7 @@ La primul start se creează baza de date `backend/data/sidequest.mv.db` și se �
 
 Tot la pornire se creează automat folderul **`backend/uploads/`**, unde se salvează pozele-dovadă (nu trebuie creat de mână; e în `.gitignore`). Locația se poate schimba cu proprietatea `sidequest.uploads-dir`, de exemplu `./mvnw spring-boot:run -Dspring-boot.run.arguments=--sidequest.uploads-dir=/cale/alta`. Limita pentru o poză e de 10 MB.
 
-**Ai deja o bază de date din versiunea anterioară?** Nu trebuie ștearsă: Hibernate (`ddl-auto=update`) adaugă singur coloanele noi (`xp_awarded`, `proof_text`, `proof_image_path`). Quest-urile completate înainte de update apar în istoric fără XP (nu era salvat per quest) și fără dovadă.
+**Ai deja o bază de date dintr-o versiune anterioară?** Nu trebuie ștearsă: Hibernate (`ddl-auto=update`) adaugă singur coloanele noi din Faza 1 (`xp_awarded`, `proof_text`, `proof_image_path`) și tabelele noi din Faza 2 (`quest_groups`, `group_memberships`). Quest-urile completate înainte de Faza 1 apar în istoric fără XP (nu era salvat per quest) și fără dovadă.
 
 Pentru un start de la zero, șterge folderele `backend/data/` și `backend/uploads/`.
 
@@ -47,6 +53,8 @@ npm run dev
 ```
 
 Deschide <http://localhost:5173>. Vite trimite cererile `/api/*` către `http://localhost:8080` (prefixul `/api` e scos de proxy), deci nu e nevoie de CORS. Tot prin proxy vin și pozele (`/api/uploads/...`).
+
+**Eroare 502 în browser?** Înseamnă că Vite rulează, dar backend-ul nu. Pornește-l (pasul 1) și așteaptă linia `Started SideQuestApplication` înainte să deschizi aplicația.
 
 Dacă aveai deja proiectul instalat, rulează din nou `npm install`: s-a adăugat dependența `framer-motion`. Alte comenzi utile: `npm run lint` (oxlint) și `npm run build`.
 
@@ -67,6 +75,10 @@ cd backend
 | `GET` | `/users/{id}/profile` | XP total, nivel + titlu, progres către nivelul următor, streak curent și record |
 | `GET` | `/users/{id}/history` | Quest-urile completate, cele mai noi primele: dată, `completedAt`, quest (text, categorie, dificultate), `xpAwarded`, `proof: {text, imageUrl}` sau `null` |
 | `GET` | `/uploads/{fișier}` | Poza-dovadă salvată (URL-ul vine în `proof.imageUrl`) |
+| `POST` | `/groups` | Creează un grup. Body: `{"name": "Gașca", "creatorUserId": 1}` → `201` cu `id`, `name`, `inviteCode`, `createdAt`, `creatorUserId`, `memberCount`, `joinedAt`. Creatorul devine automat membru |
+| `POST` | `/groups/join` | Intră într-un grup. Body: `{"userId": 2, "inviteCode": "K7QX2M"}` → `200` cu grupul. Codul e acceptat și cu litere mici, spații sau cratimă. Cod inexistent → `404`; deja membru → `409` |
+| `GET` | `/users/{id}/groups` | Grupurile utilizatorului, în ordinea în care a intrat în ele (cu `inviteCode` și `memberCount`) |
+| `GET` | `/groups/{id}/leaderboard` | Membrii grupului, sortați descrescător după `totalXp`: `rank`, `userId`, `username`, `totalXp`, `level`, `title`, `streak` (curent), `completedToday` |
 
 La login pentru un utilizator existent, `zoneId` din body e ignorat: zilele deja atribuite depind de fusul salvat la creare.
 
@@ -87,6 +99,8 @@ Erorile vin în format `ProblemDetail` (RFC 9457): `404` utilizator/poză inexis
 - **Niveluri:** nivelul *n* începe la `50·n·(n−1)` XP și are lățimea `100·n` (nivel 2 la 100 XP, nivel 3 la 300, nivel 4 la 600…). Titlurile: Cartof de Canapea → Ucenic Curios → Explorator de Cartier → Vânător de Misiuni → Cavaler al Rutinei → Maestru al Side-Quest-urilor → Legendă Locală → Boss Final.
 - **Login fără parolă:** căutarea după username e case-insensitive (`Maria` și `maria` sunt același cont). Dacă două cereri creează simultan același username nou, cea care pierde cursa pe `UNIQUE(username)` citește contul câștigătorului și se loghează în el, deci ambele primesc același utilizator.
 - **Dovezi:** pozele se salvează în `uploads/` sub un nume generat (`<uuid>.<ext>`), nu sub numele trimis de client. Formatul (JPG, PNG, GIF, WebP) se verifică după primii octeți ai fișierului, nu după `Content-Type`, deci un HTML deghizat în `.png` e respins. Endpoint-ul de servire acceptă doar nume de forma celor generate (fără `../`) și trimite `X-Content-Type-Options: nosniff`. Dacă completarea eșuează după ce poza a fost scrisă (`409`, text prea lung), fișierul e șters. În baza de date, `QuestAssignment` are `proof_text`, `proof_image_path` (numele fișierului) și `xp_awarded` (XP-ul acordat efectiv, cu bonusul de streak de atunci, afișat în istoric).
+- **Grupuri:** entitățile `Group` (tabela `quest_groups`, pentru că `GROUP` e cuvânt rezervat în SQL și în JPQL) și `GroupMembership` (`UNIQUE(user_id, group_id)`: nu poți fi de două ori în același grup). Codurile de invitație au 6 caractere dintr-un alfabet fără caractere care se confundă (`0/O`, `1/I/L`), deci ~887 milioane de combinații. Sunt generate cu `SecureRandom`, verificate să fie libere și protejate de `UNIQUE(invite_code)`.
+- **Leaderboard:** sortare după XP total, apoi după streak-ul curent, apoi după username (ca ordinea să fie stabilă). Membrii cu același XP împart locul (1, 1, 3). Streak-ul fiecărui membru e calculat cu `StreakCalculator`, în fusul orar al acelui membru. Zilele completate ale tuturor membrilor vin dintr-un singur query.
 - **Concurență:** `@Version` pe `QuestAssignment` face ca două „Completed” simultane să acorde XP o singură dată (al doilea primește `409`). Dacă două cereri creează simultan quest-ul zilei, pierzătorul prinde violarea `UNIQUE` și îl citește pe al câștigătorului.
 
 ## Decizie: `LocalDate` + `ZoneId`, nu UTC
@@ -108,7 +122,7 @@ Ce facem în schimb:
 
 ## Teste
 
-`./mvnw test` rulează 117 teste:
+`./mvnw test` rulează 134 de teste:
 
 - **`StreakCalculatorTest`** (48): zi ratată, completare la **23:59 vs 00:01**, fusuri orare diferite (același instant → zile diferite; Kiritimati UTC+14, Pago Pago UTC−11, Kolkata UTC+5:30), **DST** primăvară și toamnă în București și New York (ziua de 23h/25h, ora „inexistentă” și ora repetată), granițe de an/lună/an bisect, date din viitor, duplicate. Un test de mutație (înlocuirea fusului utilizatorului cu UTC) pică 18 teste.
 - **`XpServiceTest`, `LevelServiceTest`**: recompense, plafon de bonus, granițele nivelurilor, titluri.
@@ -116,7 +130,9 @@ Ce facem în schimb:
   - **login:** username existent → `200` cu același id, fus orar păstrat, alt case acceptat; login-ul returnează XP-ul, streak-ul (încă viu dacă azi nu e completat, dar ieri da) și istoricul; username nou → `201` cu istoric gol; două înregistrări simultane cu același username nou ajung în același cont (`200` + `201`);
   - **istoric:** doar quest-urile completate, descrescător, cu XP-ul acordat efectiv; `404` pentru utilizator inexistent;
   - **dovezi:** poză + text (numele trimis de client e ignorat, poza e servită identic, apare în istoric și în quest-ul zilei), doar text, doar poză, fără nimic; fișier care nu e poză → `400` și quest-ul rămâne deschis; text > 500 → `400` fără poză orfană; a doua completare cu poză → `409` fără poză orfană; `/uploads` refuză nume arbitrare și `../`.
-- **`QuestSeederTest`, `QuestAssignmentConstraintTest`**: seed-ul (30 de quest-uri, 4 categorii, diacritice intacte) și constrângerile `UNIQUE`.
+- **`GroupApiTest`** (Faza 2): creare grup (cod de 6 caractere, creatorul e membru, validare nume/creator), coduri unice și fără caractere ambigue, join cu cod valid (și scris cu litere mici, spații, cratimă), **join cu cod invalid** → `404` cu mesaj clar, **join când ești deja membru** (inclusiv creatorul) → `409`, un user în mai multe grupuri, **ordinea din leaderboard** (XP descrescător, rang, streak curent, nivel, titlu; un membru care a ratat o zi are streak 0) și locuri împărțite la XP egal.
+- **`InviteCodeGeneratorTest`**: lungime, alfabet, normalizarea codului scris de utilizator.
+- **`QuestSeederTest`, `QuestAssignmentConstraintTest`**: seed-ul (30 de quest-uri, 4 categorii, diacritice intacte) și constrângerile `UNIQUE` (inclusiv membru dublu în grup și cod de invitație duplicat).
 
 Testele scriu pozele în `backend/target/test-uploads/`, nu în `uploads/`.
 

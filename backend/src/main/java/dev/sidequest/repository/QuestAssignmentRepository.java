@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,6 +16,13 @@ public interface QuestAssignmentRepository extends JpaRepository<QuestAssignment
 
     @Query("select a.localDate from QuestAssignment a where a.user.id = :userId and a.completedAt is not null")
     List<LocalDate> findCompletedDates(@Param("userId") Long userId);
+
+    /** Zilele completate ale mai multor utilizatori dintr-un singur query (pentru leaderboard). */
+    @Query("""
+            select new dev.sidequest.repository.CompletedDay(a.user.id, a.localDate)
+            from QuestAssignment a
+            where a.user.id in :userIds and a.completedAt is not null""")
+    List<CompletedDay> findCompletedDaysOfUsers(@Param("userIds") Collection<Long> userIds);
 
     @Query("select a.quest.id from QuestAssignment a where a.user.id = :userId")
     List<Long> findAssignedQuestIds(@Param("userId") Long userId);

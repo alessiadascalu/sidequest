@@ -16,6 +16,8 @@
   --cyan: #22c3ff;
   --yellow: #fff36b;
   --danger: #ff5c7a;
+  --gold: #ffd166;
+  --grad-gold: linear-gradient(135deg, #fff3b0 0%, #ffd166 45%, #f5a623 100%);
 
   --grad-main: linear-gradient(135deg, var(--violet) 0%, var(--pink) 55%, var(--orange) 100%);
   --grad-cool: linear-gradient(135deg, var(--cyan), var(--violet));
