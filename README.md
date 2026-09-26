@@ -21,9 +21,14 @@ Fără parolă: **username-ul e contul**. Dacă scrii un username care există d
 
 ```
 SideQuestApp/
-├── backend/    Java 21 · Spring Boot 3.5 · Spring Data JPA · H2 (fișier) · JUnit 5
-└── frontend/   React 19 · Vite · Framer Motion · canvas-confetti
+├── backend/      Java 21 · Spring Boot 3.5 · Spring Data JPA · H2 local / PostgreSQL în prod · JUnit 5
+│   └── Dockerfile     imaginea pentru Render
+├── frontend/     React 19 · Vite · Framer Motion · canvas-confetti
+│   └── .env.example   VITE_API_URL
+└── render.yaml   Blueprint Render: backend (Docker) + PostgreSQL
 ```
+
+Deploy gratuit: **backend pe Render** (Web Service + PostgreSQL), **frontend pe Vercel**. Vezi [Deploy](#deploy).
 
 ## Cum rulezi proiectul
 
@@ -52,7 +57,9 @@ npm install
 npm run dev
 ```
 
-Deschide <http://localhost:5173>. Vite trimite cererile `/api/*` către `http://localhost:8080` (prefixul `/api` e scos de proxy), deci nu e nevoie de CORS. Tot prin proxy vin și pozele (`/api/uploads/...`).
+Deschide <http://localhost:5173>. Fără fișier `.env`, Vite trimite cererile `/api/*` către `http://localhost:8080` (prefixul `/api` e scos de proxy), deci nu e nevoie de CORS. Tot prin proxy vin și pozele (`/api/uploads/...`).
+
+Varianta cu adresa backend-ului explicită, ca în producție: `cp .env.example .env` (conține `VITE_API_URL=http://localhost:8080`). Frontend-ul cheamă atunci backend-ul direct, iar backend-ul permite implicit originea `http://localhost:5173` (CORS). Dacă Vite pornește pe alt port, pornește backend-ul cu `FRONTEND_URL=http://localhost:<port>`.
 
 **Eroare 502 în browser?** Înseamnă că Vite rulează, dar backend-ul nu. Pornește-l (pasul 1) și așteaptă linia `Started SideQuestApplication` înainte să deschizi aplicația.
 
@@ -64,6 +71,64 @@ Dacă aveai deja proiectul instalat, rulează din nou `npm install`: s-a adăuga
 cd backend
 ./mvnw test
 ```
+
+## Deploy
+
+Ordinea contează: întâi backend-ul (ca să ai URL-ul API-ului), apoi frontend-ul, apoi înapoi pe Render ca să-i spui backend-ului adresa frontend-ului (CORS).
+
+### 1. Backend + baza de date pe Render
+
+Render nu are runtime nativ pentru Java, așa că backend-ul rulează ca imagine **Docker**. `backend/Dockerfile` face build-ul cu Maven Wrapper (`./mvnw package`) și pornește jar-ul cu profilul `prod`. Nu trebuie completate comenzi de build/start în dashboard.
+
+**Varianta recomandată: Blueprint (`render.yaml`)**
+
+1. Urcă repo-ul pe GitHub.
+2. În Render: **New → Blueprint**, alegi repo-ul. Render citește `render.yaml` și creează:
+   - `sidequest-db`: PostgreSQL, plan gratuit;
+   - `sidequest-api`: Web Service Docker, plan gratuit, cu variabilele bazei de date legate automat.
+3. Când îți cere `FRONTEND_URL`, poți lăsa gol deocamdată (îl completezi la pasul 3).
+4. Primul build durează câteva minute. La final, `https://<nume>.onrender.com/actuator/health` trebuie să răspundă `{"status":"UP"}`. Schema bazei de date și cele 30 de quest-uri se creează singure la prima pornire (`ddl-auto=update`).
+
+**Varianta manuală (fără Blueprint)**
+
+1. **New → PostgreSQL** (plan Free). Din pagina bazei copiezi **Internal Database URL** (`postgresql://user:parolă@host/db`).
+2. **New → Web Service** → repo-ul → Language/Runtime **Docker**, **Root Directory** `backend`, Dockerfile path `./Dockerfile`, **Health Check Path** `/actuator/health`.
+3. Variabile de mediu: `DATABASE_URL` = URL-ul copiat la pasul 1 și `FRONTEND_URL` (vezi mai jos). Backend-ul desface singur `DATABASE_URL` în setările JDBC.
+
+**Variabile de mediu pe Render (backend)**
+
+| Variabilă | Obligatorie | Ce e |
+|---|---|---|
+| `SPRING_PROFILES_ACTIVE` | da (deja setată) | `prod`. Setată în `Dockerfile` și în `render.yaml`. Activează PostgreSQL |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | da, **sau** `DATABASE_URL` | Conexiunea la PostgreSQL. Cu Blueprint-ul sunt legate automat de `sidequest-db` |
+| `DATABASE_URL` | alternativă la `DB_*` | `postgresql://user:parolă@host:port/db` (formatul din dashboard-ul Render). Dacă e setat și `DB_HOST`, câștigă `DB_*` |
+| `FRONTEND_URL` | da, pentru frontend-ul deployat | Originile care pot apela API-ul (CORS), separate prin virgulă, cu `*` permis. Ex.: `https://sidequest.vercel.app,https://sidequest-*.vercel.app` (al doilea acoperă preview-urile Vercel). Fără `/` la final. Implicit: `http://localhost:5173` |
+| `PORT` | **nu o seta** | Render o setează singur; serverul ascultă pe ea (local: 8080) |
+| `UPLOADS_DIR` | nu | Unde se salvează pozele (implicit `uploads/` în container) |
+
+### 2. Frontend pe Vercel
+
+1. În Vercel: **Add New → Project**, imporți repo-ul.
+2. **Root Directory**: `frontend`. Framework-ul (Vite), build-ul (`npm run build`) și output-ul (`dist`) sunt detectate automat.
+3. **Environment Variables**: `VITE_API_URL` = URL-ul backend-ului de pe Render, **fără `/` la final**, ex. `https://sidequest-api.onrender.com`. Bifează Production și Preview.
+4. **Deploy.**
+
+`VITE_API_URL` e citită **la build** și inclusă în JavaScript-ul generat: dacă o schimbi, fă **Redeploy**. Un build pe Vercel fără ea pică intenționat, cu un mesaj clar, în loc să publice un site care nu merge.
+
+| Variabilă (Vercel) | Exemplu |
+|---|---|
+| `VITE_API_URL` | `https://sidequest-api.onrender.com` |
+
+### 3. Leagă-le între ele
+
+Copiază URL-ul Vercel (ex. `https://sidequest.vercel.app`) în `FRONTEND_URL` pe Render (**Environment → Save, rebuild and deploy**). Fără pasul ăsta browserul blochează cererile (eroare CORS în consolă).
+
+### Limitări ale planurilor gratuite (asumate)
+
+- **Pozele-dovadă nu sunt persistente.** Discul unui serviciu Render e efemer: fișierele din `uploads/` se pierd **la fiecare redeploy și la fiecare restart**. Pe planul gratuit serviciul adoarme după ~15 minute fără trafic, iar la trezire pornește un container nou, deci pozele se vor pierde **destul de des**. Textul dovezii, XP-ul, streak-ul, istoricul și grupurile sunt în PostgreSQL și rămân. În aplicație, o poză pierdută apare ca „📷 poză pierdută”, nu ca imagine stricată. E un compromis acceptat pentru acum; soluția pe termen lung e un storage extern (ex. S3/Cloudflare R2) sau un Persistent Disk Render (doar pe planurile plătite).
+- **Pornire lentă după inactivitate.** Prima cerere după ce serviciul a adormit poate dura ~1 minut. Frontend-ul afișează atunci un mesaj că serverul se trezește.
+- **Baza PostgreSQL gratuită de pe Render expiră** după o perioadă limitată (la momentul scrierii, 30 de zile de la creare; verifică politica actuală Render). Înainte de expirare, fă upgrade sau exportă datele.
+- H2 rămâne în jar (e baza implicită locală), dar în profilul `prod` nu e folosit.
 
 ## API
 
@@ -122,7 +187,7 @@ Ce facem în schimb:
 
 ## Teste
 
-`./mvnw test` rulează 134 de teste:
+`./mvnw test` rulează 146 de teste:
 
 - **`StreakCalculatorTest`** (48): zi ratată, completare la **23:59 vs 00:01**, fusuri orare diferite (același instant → zile diferite; Kiritimati UTC+14, Pago Pago UTC−11, Kolkata UTC+5:30), **DST** primăvară și toamnă în București și New York (ziua de 23h/25h, ora „inexistentă” și ora repetată), granițe de an/lună/an bisect, date din viitor, duplicate. Un test de mutație (înlocuirea fusului utilizatorului cu UTC) pică 18 teste.
 - **`XpServiceTest`, `LevelServiceTest`**: recompense, plafon de bonus, granițele nivelurilor, titluri.
@@ -132,6 +197,9 @@ Ce facem în schimb:
   - **dovezi:** poză + text (numele trimis de client e ignorat, poza e servită identic, apare în istoric și în quest-ul zilei), doar text, doar poză, fără nimic; fișier care nu e poză → `400` și quest-ul rămâne deschis; text > 500 → `400` fără poză orfană; a doua completare cu poză → `409` fără poză orfană; `/uploads` refuză nume arbitrare și `../`.
 - **`GroupApiTest`** (Faza 2): creare grup (cod de 6 caractere, creatorul e membru, validare nume/creator), coduri unice și fără caractere ambigue, join cu cod valid (și scris cu litere mici, spații, cratimă), **join cu cod invalid** → `404` cu mesaj clar, **join când ești deja membru** (inclusiv creatorul) → `409`, un user în mai multe grupuri, **ordinea din leaderboard** (XP descrescător, rang, streak curent, nivel, titlu; un membru care a ratat o zi are streak 0) și locuri împărțite la XP egal.
 - **`InviteCodeGeneratorTest`**: lungime, alfabet, normalizarea codului scris de utilizator.
+- **Deploy**: `DatabaseUrlEnvironmentPostProcessorTest` (URL-ul intern Render fără port, URL extern cu port, `sslmode` și parolă codată, URL-uri invalide, prioritatea `DB_*` față de `DATABASE_URL`), `CorsConfigTest` și `CorsTest` (origine exactă și pattern de preview Vercel permise, alte origini respinse cu `403`, `/actuator/health` expus, restul actuator-ului nu).
+
+Profilul `prod` a fost verificat și manual, cap-coadă, pe un PostgreSQL 18 real: pornire cu `DATABASE_URL` și `PORT`, crearea schemei, login, completare cu poză, istoric, grupuri, leaderboard, CORS.
 - **`QuestSeederTest`, `QuestAssignmentConstraintTest`**: seed-ul (30 de quest-uri, 4 categorii, diacritice intacte) și constrângerile `UNIQUE` (inclusiv membru dublu în grup și cod de invitație duplicat).
 
 Testele scriu pozele în `backend/target/test-uploads/`, nu în `uploads/`.

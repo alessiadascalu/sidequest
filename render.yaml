@@ -1,0 +1,52 @@
+# Render Blueprint: backend-ul SideQuest (Docker) + baza PostgreSQL.
+# În dashboard: New → Blueprint → alegi repo-ul; Render citește fișierul ăsta.
+# Frontend-ul NU e aici: se deployează separat, pe Vercel (vezi README).
+
+databases:
+  - name: sidequest-db
+    plan: free
+    databaseName: sidequest
+    user: sidequest
+
+services:
+  - type: web
+    name: sidequest-api
+    # Render nu are runtime nativ pentru Java: build-ul (Maven Wrapper) e în backend/Dockerfile.
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /actuator/health
+    # Redeploy doar când se schimbă backend-ul, nu la fiecare modificare de frontend.
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      # Conexiunea la baza de mai sus, citită de application-prod.properties
+      - key: DB_HOST
+        fromDatabase:
+          name: sidequest-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: sidequest-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: sidequest-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: sidequest-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: sidequest-db
+          property: password
+      # URL-ul frontend-ului de pe Vercel (CORS). Îl completezi în dashboard după ce ai
+      # deployat frontend-ul, ex.: https://sidequest.vercel.app,https://sidequest-*.vercel.app
+      - key: FRONTEND_URL
+        sync: false
