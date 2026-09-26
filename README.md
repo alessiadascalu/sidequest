@@ -1,15 +1,22 @@
 # SideQuest 🧭
 
-O mini-misiune pe zi. Primești un quest scurt și amuzant (în română), îl bifezi cu **Completed**, îți crești **streak-ul** și câștigi **XP** ca să urci de nivel: de la „Cartof de Canapea” până la „Boss Final”.
+O mini-misiune pe zi. Primești un quest scurt și amuzant (în română), îl bifezi cu **Completed** (opțional cu o poză sau câteva cuvinte drept dovadă), îți crești **streak-ul** și câștigi **XP** ca să urci de nivel: de la „Cartof de Canapea” până la „Boss Final”. Tot ce ai completat rămâne în tab-ul **Istoric**.
 
-Proiect de 2 zile, fără autentificare reală: îți alegi un username, iar aplicația ține minte id-ul în `localStorage`.
+Fără parolă: **username-ul e contul**. Dacă scrii un username care există deja, intri direct în contul lui, cu tot cu XP, streak și istoric. Dacă nu există, se creează. Aplicația ține minte id-ul în `localStorage`.
+
+## Ce e nou în Faza 1
+
+- **Fix login:** `POST /users` nu mai răspunde cu `409 username deja luat`. Username existent (indiferent de majuscule) → `200` cu datele utilizatorului; username nou → `201` cu contul creat.
+- **Istoric:** `GET /users/{id}/history` și un tab nou „Istoric”, cu timeline grupat pe zile, iconițe pe categorie, XP câștigat și dovada.
+- **Dovadă la completare:** poză (salvată local în `backend/uploads/`) și/sau text scurt, ambele opționale. Pozele se servesc prin `GET /uploads/{fișier}`.
+- **Frontend rescris:** dark mode cu accente neon, Framer Motion peste tot (tranziții între ecrane și tab-uri, bară de XP care se umple animat, confetti la completare, ecran dedicat de level-up), mascota **Questy**, bottom sheet pentru dovadă, lightbox pentru poze.
 
 ## Structura
 
 ```
 SideQuestApp/
 ├── backend/    Java 21 · Spring Boot 3.5 · Spring Data JPA · H2 (fișier) · JUnit 5
-└── frontend/   React 19 · Vite · canvas-confetti
+└── frontend/   React 19 · Vite · Framer Motion · canvas-confetti
 ```
 
 ## Cum rulezi proiectul
@@ -23,7 +30,13 @@ cd backend
 ./mvnw spring-boot:run        # Windows: mvnw.cmd spring-boot:run
 ```
 
-La primul start se creează baza de date `backend/data/sidequest.mv.db` și se încarcă cele 30 de quest-uri. Datele rămân între restarturi. Pentru un start de la zero, șterge folderul `backend/data/`.
+La primul start se creează baza de date `backend/data/sidequest.mv.db` și se încarcă cele 30 de quest-uri. Datele rămân între restarturi.
+
+Tot la pornire se creează automat folderul **`backend/uploads/`**, unde se salvează pozele-dovadă (nu trebuie creat de mână; e în `.gitignore`). Locația se poate schimba cu proprietatea `sidequest.uploads-dir`, de exemplu `./mvnw spring-boot:run -Dspring-boot.run.arguments=--sidequest.uploads-dir=/cale/alta`. Limita pentru o poză e de 10 MB.
+
+**Ai deja o bază de date din versiunea anterioară?** Nu trebuie ștearsă: Hibernate (`ddl-auto=update`) adaugă singur coloanele noi (`xp_awarded`, `proof_text`, `proof_image_path`). Quest-urile completate înainte de update apar în istoric fără XP (nu era salvat per quest) și fără dovadă.
+
+Pentru un start de la zero, șterge folderele `backend/data/` și `backend/uploads/`.
 
 ### 2. Frontend (port 5173)
 
@@ -33,7 +46,9 @@ npm install
 npm run dev
 ```
 
-Deschide <http://localhost:5173>. Vite trimite cererile `/api/*` către `http://localhost:8080` (prefixul `/api` e scos de proxy), deci nu e nevoie de CORS.
+Deschide <http://localhost:5173>. Vite trimite cererile `/api/*` către `http://localhost:8080` (prefixul `/api` e scos de proxy), deci nu e nevoie de CORS. Tot prin proxy vin și pozele (`/api/uploads/...`).
+
+Dacă aveai deja proiectul instalat, rulează din nou `npm install`: s-a adăugat dependența `framer-motion`. Alte comenzi utile: `npm run lint` (oxlint) și `npm run build`.
 
 ### Teste
 
@@ -46,12 +61,23 @@ cd backend
 
 | Metodă | Endpoint | Ce face |
 |---|---|---|
-| `POST` | `/users` | Creează un utilizator. Body: `{"username": "maria", "zoneId": "Europe/Bucharest"}` → `201` |
-| `GET` | `/users/{id}/quest/today` | Quest-ul zilei locale a utilizatorului (îl creează la prima cerere). Include `xpReward` și streak-ul |
-| `POST` | `/users/{id}/quest/today/complete` | Bifează quest-ul: acordă XP, actualizează streak-ul și nivelul. A doua oară în aceeași zi → `409` |
+| `POST` | `/users` | **Login sau creare.** Body: `{"username": "maria", "zoneId": "Europe/Bucharest"}`. Username existent (case-insensitive) → `200`; nou → `201` + `Location`. Răspunsul conține profilul complet (XP, nivel, streak), `created` și `history` |
+| `GET` | `/users/{id}/quest/today` | Quest-ul zilei locale a utilizatorului (îl creează la prima cerere). Include `xpReward`, streak-ul și `proof` dacă e deja completat |
+| `POST` | `/users/{id}/quest/today/complete` | Bifează quest-ul: acordă XP, actualizează streak-ul și nivelul. Fără body sau `multipart/form-data` cu câmpurile opționale `photo` (fișier) și `proofText` (max. 500 caractere). A doua oară în aceeași zi → `409` |
 | `GET` | `/users/{id}/profile` | XP total, nivel + titlu, progres către nivelul următor, streak curent și record |
+| `GET` | `/users/{id}/history` | Quest-urile completate, cele mai noi primele: dată, `completedAt`, quest (text, categorie, dificultate), `xpAwarded`, `proof: {text, imageUrl}` sau `null` |
+| `GET` | `/uploads/{fișier}` | Poza-dovadă salvată (URL-ul vine în `proof.imageUrl`) |
 
-Erorile vin în format `ProblemDetail` (RFC 9457): `404` utilizator inexistent sau quest neatribuit, `400` validare (cu `errors` pe câmpuri), `409` conflict (username luat / quest deja completat).
+La login pentru un utilizator existent, `zoneId` din body e ignorat: zilele deja atribuite depind de fusul salvat la creare.
+
+Exemplu de completare cu dovadă:
+
+```bash
+curl -X POST http://localhost:8080/users/1/quest/today/complete \
+     -F "photo=@poza.jpg" -F "proofText=Am urcat 12 etaje pe scări"
+```
+
+Erorile vin în format `ProblemDetail` (RFC 9457): `404` utilizator/poză inexistentă sau quest neatribuit, `400` validare (cu `errors` pe câmpuri; și fișier care nu e poză, text de dovadă prea lung), `409` quest deja completat, `413` poză mai mare de 10 MB.
 
 ## Cum funcționează
 
@@ -59,6 +85,8 @@ Erorile vin în format `ProblemDetail` (RFC 9457): `404` utilizator inexistent s
 - **Streak:** zile locale consecutive cu quest completat. Dacă azi nu ai apucat să completezi, dar ieri da, streak-ul e încă în viață (mai ai până la miezul nopții). O zi întreagă ratată îl resetează la 0; recordul (`longest`) se păstrează.
 - **XP:** `XpService` însumează mai multe `XpStrategy` (Strategy pattern): `DifficultyXpStrategy` (Ușor 10 / Mediu 20 / Greu 35) și `StreakBonusXpStrategy` (+2 XP pe fiecare zi de streak după prima, maximum +20). O regulă nouă înseamnă doar un `@Component` nou, fără să modifici `XpService`.
 - **Niveluri:** nivelul *n* începe la `50·n·(n−1)` XP și are lățimea `100·n` (nivel 2 la 100 XP, nivel 3 la 300, nivel 4 la 600…). Titlurile: Cartof de Canapea → Ucenic Curios → Explorator de Cartier → Vânător de Misiuni → Cavaler al Rutinei → Maestru al Side-Quest-urilor → Legendă Locală → Boss Final.
+- **Login fără parolă:** căutarea după username e case-insensitive (`Maria` și `maria` sunt același cont). Dacă două cereri creează simultan același username nou, cea care pierde cursa pe `UNIQUE(username)` citește contul câștigătorului și se loghează în el, deci ambele primesc același utilizator.
+- **Dovezi:** pozele se salvează în `uploads/` sub un nume generat (`<uuid>.<ext>`), nu sub numele trimis de client. Formatul (JPG, PNG, GIF, WebP) se verifică după primii octeți ai fișierului, nu după `Content-Type`, deci un HTML deghizat în `.png` e respins. Endpoint-ul de servire acceptă doar nume de forma celor generate (fără `../`) și trimite `X-Content-Type-Options: nosniff`. Dacă completarea eșuează după ce poza a fost scrisă (`409`, text prea lung), fișierul e șters. În baza de date, `QuestAssignment` are `proof_text`, `proof_image_path` (numele fișierului) și `xp_awarded` (XP-ul acordat efectiv, cu bonusul de streak de atunci, afișat în istoric).
 - **Concurență:** `@Version` pe `QuestAssignment` face ca două „Completed” simultane să acorde XP o singură dată (al doilea primește `409`). Dacă două cereri creează simultan quest-ul zilei, pierzătorul prinde violarea `UNIQUE` și îl citește pe al câștigătorului.
 
 ## Decizie: `LocalDate` + `ZoneId`, nu UTC
@@ -76,15 +104,20 @@ Ce facem în schimb:
 4. `completedAt` e un `Instant` (momentul real, fără ambiguitate), dar **nu** el decide streak-ul, ci `localDate`.
 5. `StreakCalculator` lucrează doar cu `LocalDate`: „ziua următoare” e mereu `date.plusDays(1)`. Nu scădem `Instant`-uri și nu comparăm cu 24h, pentru că zilele cu DST au 23 sau 25 de ore. De exemplu, 25 oct 00:30 și 26 oct 00:30 (Europa/București) sunt la 25h distanță, deși sunt zile consecutive.
 
-**Limitări asumate** (scope de 2 zile): dacă un utilizator își schimbă fusul orar, zilele deja atribuite nu se recalculează. Și, fără auth, oricine cunoaște un `id` poate cere datele acelui utilizator.
+**Limitări asumate:** dacă un utilizator își schimbă fusul orar, zilele deja atribuite nu se recalculează. Și, fără parolă, oricine scrie un username existent intră în contul respectiv, iar oricine cunoaște un `id` poate cere datele acelui utilizator. Pozele au nume UUID greu de ghicit, dar nu sunt protejate de autentificare.
 
 ## Teste
 
-`./mvnw test` rulează 106 teste:
+`./mvnw test` rulează 117 teste:
 
 - **`StreakCalculatorTest`** (48): zi ratată, completare la **23:59 vs 00:01**, fusuri orare diferite (același instant → zile diferite; Kiritimati UTC+14, Pago Pago UTC−11, Kolkata UTC+5:30), **DST** primăvară și toamnă în București și New York (ziua de 23h/25h, ora „inexistentă” și ora repetată), granițe de an/lună/an bisect, date din viitor, duplicate. Un test de mutație (înlocuirea fusului utilizatorului cu UTC) pică 18 teste.
 - **`XpServiceTest`, `LevelServiceTest`**: recompense, plafon de bonus, granițele nivelurilor, titluri.
-- **`SideQuestApiTest`**: fluxul HTTP complet cu H2 în memorie și `Clock` mutabil (streak peste miezul nopții și peste DST, zi ratată, două cereri concurente, rotația celor 30 de quest-uri).
+- **`SideQuestApiTest`**: fluxul HTTP complet cu H2 în memorie și `Clock` mutabil (streak peste miezul nopții și peste DST, zi ratată, două cereri concurente, rotația celor 30 de quest-uri). Nou în Faza 1:
+  - **login:** username existent → `200` cu același id, fus orar păstrat, alt case acceptat; login-ul returnează XP-ul, streak-ul (încă viu dacă azi nu e completat, dar ieri da) și istoricul; username nou → `201` cu istoric gol; două înregistrări simultane cu același username nou ajung în același cont (`200` + `201`);
+  - **istoric:** doar quest-urile completate, descrescător, cu XP-ul acordat efectiv; `404` pentru utilizator inexistent;
+  - **dovezi:** poză + text (numele trimis de client e ignorat, poza e servită identic, apare în istoric și în quest-ul zilei), doar text, doar poză, fără nimic; fișier care nu e poză → `400` și quest-ul rămâne deschis; text > 500 → `400` fără poză orfană; a doua completare cu poză → `409` fără poză orfană; `/uploads` refuză nume arbitrare și `../`.
 - **`QuestSeederTest`, `QuestAssignmentConstraintTest`**: seed-ul (30 de quest-uri, 4 categorii, diacritice intacte) și constrângerile `UNIQUE`.
+
+Testele scriu pozele în `backend/target/test-uploads/`, nu în `uploads/`.
 
 CI: `.github/workflows/ci.yml` rulează `mvn test` la fiecare push și pull request.

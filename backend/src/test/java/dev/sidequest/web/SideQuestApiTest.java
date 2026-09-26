@@ -6,15 +6,21 @@ import dev.sidequest.support.MutableClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -27,12 +33,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -89,6 +98,17 @@ class SideQuestApiTest {
         return read(mvc.perform(get("/users/{id}/profile", userId)).andExpect(status().isOk()).andReturn());
     }
 
+    private JsonNode login(String username, String zoneId, int expectedStatus) throws Exception {
+        return read(mvc.perform(post("/users").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"%s\",\"zoneId\":\"%s\"}".formatted(username, zoneId)))
+                .andExpect(status().is(expectedStatus))
+                .andReturn());
+    }
+
+    private JsonNode history(long userId) throws Exception {
+        return read(mvc.perform(get("/users/{id}/history", userId)).andExpect(status().isOk()).andReturn());
+    }
+
     private JsonNode read(MvcResult result) throws Exception {
         return json.readTree(result.getResponse().getContentAsString());
     }
@@ -111,7 +131,9 @@ class SideQuestApiTest {
                 .andExpect(jsonPath("$.id").isNumber())
                 .andExpect(jsonPath("$.username").value("maria_ro"))
                 .andExpect(jsonPath("$.zoneId").value("Europe/Bucharest"))
-                .andExpect(jsonPath("$.totalXp").value(0));
+                .andExpect(jsonPath("$.totalXp").value(0))
+                .andExpect(jsonPath("$.created").value(true))
+                .andExpect(jsonPath("$.history").isEmpty());
     }
 
     @Test
@@ -138,14 +160,80 @@ class SideQuestApiTest {
                 .andExpect(status().isBadRequest());
     }
 
+    // ---------- POST /users ca login ----------
+
     @Test
-    void duplicateUsernameIsRejectedCaseInsensitively() throws Exception {
-        String body = "{\"username\":\"DuplicatUnic\",\"zoneId\":\"Europe/Bucharest\"}";
-        mvc.perform(post("/users").contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isCreated());
+    void existingUsernameLogsInInsteadOfFailing() throws Exception {
+        long id = createUser(BUCHAREST);
+        String username = profile(id).get("username").asText();
+
+        // alt case, alt fus orar: tot același cont, cu fusul original păstrat
         mvc.perform(post("/users").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"duplicatunic\",\"zoneId\":\"Asia/Tokyo\"}"))
-                .andExpect(status().isConflict());
+                        .content("{\"username\":\"%s\",\"zoneId\":\"Asia/Tokyo\"}".formatted(username.toUpperCase())))
+                .andExpect(status().isOk())
+                .andExpect(header().doesNotExist("Location"))
+                .andExpect(jsonPath("$.id").value(id))
+                .andExpect(jsonPath("$.username").value(username))
+                .andExpect(jsonPath("$.zoneId").value("Europe/Bucharest"))
+                .andExpect(jsonPath("$.created").value(false));
+    }
+
+    @Test
+    void loginReturnsXpStreakLevelAndHistoryOfTheExistingUser() throws Exception {
+        long id = createUser(BUCHAREST);
+        String username = profile(id).get("username").asText();
+        int xp = completeAt(id, "2026-06-10T12:00", BUCHAREST).get("xpAwarded").asInt();
+        xp += completeAt(id, "2026-06-11T12:00", BUCHAREST).get("xpAwarded").asInt();
+
+        clock.setLocal("2026-06-12T08:00", BUCHAREST);
+        JsonNode login = login(username, "Europe/Bucharest", 200);
+
+        assertFalse(login.get("created").asBoolean());
+        assertEquals(id, login.get("id").asLong());
+        assertEquals(xp, login.get("totalXp").asInt());
+        assertEquals(xp, login.get("level").get("totalXp").asInt());
+        assertEquals(2, login.get("completedQuests").asInt());
+        // azi (12) încă necompletat, dar streak-ul de ieri e viu
+        assertEquals(2, login.get("streak").get("current").asInt());
+        assertFalse(login.get("streak").get("completedToday").asBoolean());
+        assertEquals(2, login.get("history").size());
+        assertEquals("2026-06-11", login.get("history").get(0).get("date").asText());
+    }
+
+    @Test
+    void newUsernameIsCreatedWithEmptyHistory() throws Exception {
+        JsonNode created = login("nou_nout", "Europe/Bucharest", 201);
+        assertTrue(created.get("created").asBoolean());
+        assertEquals(0, created.get("totalXp").asInt());
+        assertEquals(0, created.get("streak").get("current").asInt());
+        assertEquals(1, created.get("level").get("level").asInt());
+        assertTrue(created.get("history").isEmpty());
+
+        // a doua oară: login, nu cont nou
+        assertEquals(created.get("id"), login("nou_nout", "Europe/Bucharest", 200).get("id"));
+    }
+
+    @Test
+    void twoSimultaneousSignupsWithTheSameNewUsernameEndUpOnTheSameAccount() throws Exception {
+        CountDownLatch go = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Callable<MvcResult> attempt = () -> {
+                go.await();
+                return mvc.perform(post("/users").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"cursa_simultana\",\"zoneId\":\"Europe/Bucharest\"}")).andReturn();
+            };
+            Future<MvcResult> a = pool.submit(attempt);
+            Future<MvcResult> b = pool.submit(attempt);
+            go.countDown();
+
+            List<MvcResult> results = List.of(a.get(), b.get());
+            List<Integer> statuses = results.stream().map(r -> r.getResponse().getStatus()).sorted().toList();
+            assertEquals(List.of(200, 201), statuses);
+            assertEquals(read(results.get(0)).get("id"), read(results.get(1)).get("id"));
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     // ---------- GET quest/today ----------
@@ -171,6 +259,7 @@ class SideQuestApiTest {
         mvc.perform(get("/users/999999/quest/today")).andExpect(status().isNotFound());
         mvc.perform(post("/users/999999/quest/today/complete")).andExpect(status().isNotFound());
         mvc.perform(get("/users/999999/profile")).andExpect(status().isNotFound());
+        mvc.perform(get("/users/999999/history")).andExpect(status().isNotFound());
     }
 
     @Test
@@ -360,5 +449,169 @@ class SideQuestApiTest {
         // ziua 31: toate au fost văzute, rotația reîncepe fără erori
         clock.set(Instant.parse("2026-08-01T09:00:00Z").plusSeconds(86_400L * 30));
         assertTrue(seen.contains(today(id).get("quest").get("id").asLong()));
+    }
+
+    // ---------- Istoric ----------
+
+    @Test
+    void historyListsOnlyCompletedQuestsNewestFirstWithTheXpActuallyAwarded() throws Exception {
+        long id = createUser(BUCHAREST);
+        JsonNode d1 = completeAt(id, "2026-06-10T12:00", BUCHAREST);
+        JsonNode d2 = completeAt(id, "2026-06-11T12:00", BUCHAREST);
+        clock.setLocal("2026-06-12T12:00", BUCHAREST);
+        today(id); // atribuit, dar necompletat: nu apare în istoric
+
+        JsonNode h = history(id);
+        assertEquals(2, h.size());
+
+        JsonNode newest = h.get(0);
+        assertEquals("2026-06-11", newest.get("date").asText());
+        assertEquals(d2.get("assignmentId"), newest.get("assignmentId"));
+        assertEquals(d2.get("xpAwarded").asInt(), newest.get("xpAwarded").asInt());
+        assertEquals(d2.get("completedAt"), newest.get("completedAt"));
+        assertFalse(newest.get("quest").get("text").asText().isBlank());
+        assertFalse(newest.get("quest").get("category").asText().isBlank());
+        assertFalse(newest.get("quest").get("categoryLabel").asText().isBlank());
+        assertFalse(newest.get("quest").get("difficulty").asText().isBlank());
+        assertTrue(newest.get("proof").isNull());
+
+        assertEquals("2026-06-10", h.get(1).get("date").asText());
+        assertEquals(d1.get("xpAwarded").asInt(), h.get(1).get("xpAwarded").asInt());
+    }
+
+    @Test
+    void historyIsEmptyForANewUser() throws Exception {
+        assertTrue(history(createUser(BUCHAREST)).isEmpty());
+    }
+
+    // ---------- Dovadă la completare ----------
+
+    // Semnătura PNG + câțiva octeți: suficient, validăm formatul după "magic bytes"
+    static final byte[] PNG = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0x0D, 'I', 'H', 'D', 'R'};
+    static final byte[] JPEG = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0x10, 'J', 'F', 'I', 'F', 0, 1};
+
+    @Value("${sidequest.uploads-dir}") String uploadsDir;
+
+    private long uploadedFiles() throws Exception {
+        Path dir = Path.of(uploadsDir);
+        if (!Files.isDirectory(dir)) {
+            return 0;
+        }
+        try (Stream<Path> files = Files.list(dir)) {
+            return files.count();
+        }
+    }
+
+    private MockMultipartHttpServletRequestBuilder completeWithProof(long userId) {
+        return multipart("/users/{id}/quest/today/complete", userId);
+    }
+
+    @Test
+    void completingWithPhotoAndTextStoresBothAndServesThePhoto() throws Exception {
+        long id = createUser(BUCHAREST);
+        clock.setLocal("2026-06-10T12:00", BUCHAREST);
+        today(id);
+
+        JsonNode done = read(mvc.perform(completeWithProof(id)
+                        .file(new MockMultipartFile("photo", "../../etc/passwd.png", "image/png", PNG))
+                        .param("proofText", "  Am urcat 12 etaje pe scări!  "))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        String imageUrl = done.get("proof").get("imageUrl").asText();
+        assertEquals("Am urcat 12 etaje pe scări!", done.get("proof").get("text").asText());
+        // numele clientului e ignorat: salvăm sub un UUID generat de noi
+        assertTrue(imageUrl.matches("/uploads/[0-9a-f-]{36}\\.png"), imageUrl);
+
+        byte[] served = mvc.perform(get(imageUrl))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "image/png"))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andReturn().getResponse().getContentAsByteArray();
+        assertArrayEquals(PNG, served);
+
+        JsonNode entry = history(id).get(0);
+        assertEquals(imageUrl, entry.get("proof").get("imageUrl").asText());
+        assertEquals("Am urcat 12 etaje pe scări!", entry.get("proof").get("text").asText());
+        assertEquals(imageUrl, today(id).get("proof").get("imageUrl").asText());
+    }
+
+    @Test
+    void proofIsOptionalTextOnlyAndPhotoOnlyBothWork() throws Exception {
+        long textOnly = createUser(BUCHAREST);
+        clock.setLocal("2026-06-10T12:00", BUCHAREST);
+        today(textOnly);
+        JsonNode t = read(mvc.perform(completeWithProof(textOnly).param("proofText", "Făcut!"))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals("Făcut!", t.get("proof").get("text").asText());
+        assertTrue(t.get("proof").get("imageUrl").isNull());
+
+        long photoOnly = createUser(BUCHAREST);
+        today(photoOnly);
+        JsonNode p = read(mvc.perform(completeWithProof(photoOnly)
+                        .file(new MockMultipartFile("photo", "x.jpg", "image/jpeg", JPEG))
+                        .param("proofText", "   "))
+                .andExpect(status().isOk()).andReturn());
+        assertTrue(p.get("proof").get("text").isNull());
+        assertTrue(p.get("proof").get("imageUrl").asText().endsWith(".jpg"));
+
+        // multipart gol = bifare simplă, fără dovadă
+        long none = createUser(BUCHAREST);
+        today(none);
+        JsonNode n = read(mvc.perform(completeWithProof(none)).andExpect(status().isOk()).andReturn());
+        assertTrue(n.get("proof").isNull());
+    }
+
+    @Test
+    void aFileThatIsNotReallyAnImageIsRejectedAndTheQuestStaysOpen() throws Exception {
+        long id = createUser(BUCHAREST);
+        clock.setLocal("2026-06-10T12:00", BUCHAREST);
+        today(id);
+        long before = uploadedFiles();
+
+        byte[] html = "<script>alert(1)</script>".getBytes(StandardCharsets.UTF_8);
+        mvc.perform(completeWithProof(id).file(new MockMultipartFile("photo", "poza.png", "image/png", html)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").exists());
+
+        assertEquals(before, uploadedFiles());
+        assertFalse(today(id).get("completed").asBoolean());
+        assertEquals(0, profile(id).get("totalXp").asInt());
+    }
+
+    @Test
+    void tooLongProofTextIs400AndLeavesNoOrphanPhoto() throws Exception {
+        long id = createUser(BUCHAREST);
+        clock.setLocal("2026-06-10T12:00", BUCHAREST);
+        today(id);
+        long before = uploadedFiles();
+
+        mvc.perform(completeWithProof(id)
+                        .file(new MockMultipartFile("photo", "p.png", "image/png", PNG))
+                        .param("proofText", "a".repeat(501)))
+                .andExpect(status().isBadRequest());
+
+        assertEquals(before, uploadedFiles());
+        assertFalse(today(id).get("completed").asBoolean());
+    }
+
+    @Test
+    void aSecondCompletionWithPhotoIs409AndDoesNotKeepTheNewPhoto() throws Exception {
+        long id = createUser(BUCHAREST);
+        clock.setLocal("2026-06-10T12:00", BUCHAREST);
+        today(id);
+        complete(id);
+        long before = uploadedFiles();
+
+        mvc.perform(completeWithProof(id).file(new MockMultipartFile("photo", "p.png", "image/png", PNG)))
+                .andExpect(status().isConflict());
+        assertEquals(before, uploadedFiles());
+    }
+
+    @Test
+    void uploadsEndpointOnlyServesStoredImageNames() throws Exception {
+        mvc.perform(get("/uploads/00000000-0000-0000-0000-000000000000.png")).andExpect(status().isNotFound());
+        mvc.perform(get("/uploads/application.properties")).andExpect(status().isNotFound());
+        mvc.perform(get("/uploads/..%2F..%2Fpom.xml")).andExpect(status().is4xxClientError());
     }
 }

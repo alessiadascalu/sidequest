@@ -1,5 +1,6 @@
 package dev.sidequest.service;
 
+import dev.sidequest.domain.Proof;
 import dev.sidequest.domain.Quest;
 import dev.sidequest.domain.QuestAssignment;
 import dev.sidequest.domain.User;
@@ -69,8 +70,12 @@ public class QuestService {
         return new TodayQuest(assignment, streak, reward.total());
     }
 
+    /**
+     * Bifează quest-ul de azi, opțional cu o dovadă. {@code proof.imagePath()} trebuie să fie
+     * un fișier deja salvat de {@code ProofImageStorage}; textul e curățat și validat aici.
+     */
     @Transactional
-    public CompletionResult complete(Long userId) {
+    public CompletionResult complete(Long userId, Proof proof) {
         User user = findUser(userId);
         LocalDate today = streaks.today(user.getZoneId());
 
@@ -84,11 +89,29 @@ public class QuestService {
         XpAward award = xpService.calculate(new XpContext(assignment.getQuest().getDifficulty(), streak.current()));
 
         LevelInfo before = levelService.forXp(user.getTotalXp());
-        assignment.complete(clock.instant());
+        assignment.complete(clock.instant(), award.total(), new Proof(cleanProofText(proof.text()), proof.imagePath()));
         user.addXp(award.total());
         LevelInfo after = levelService.forXp(user.getTotalXp());
 
         return new CompletionResult(assignment, award, streak, after, after.level() > before.level());
+    }
+
+    /** Toate quest-urile completate de utilizator, de la cel mai recent la cel mai vechi. */
+    @Transactional(readOnly = true)
+    public List<QuestAssignment> history(Long userId) {
+        findUser(userId);
+        return assignments.findCompletedHistory(userId);
+    }
+
+    private static String cleanProofText(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        String trimmed = text.strip();
+        if (trimmed.length() > Proof.MAX_TEXT_LENGTH) {
+            throw new InvalidInputException("Descrierea dovezii poate avea cel mult " + Proof.MAX_TEXT_LENGTH + " de caractere.");
+        }
+        return trimmed;
     }
 
     /** Streak-ul din zilele deja completate; cu {@code includeToday} simulează completarea quest-ului de azi. */

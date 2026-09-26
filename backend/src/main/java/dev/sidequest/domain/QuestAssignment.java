@@ -48,6 +48,18 @@ public class QuestAssignment {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    // XP-ul acordat efectiv la completare (cu bonusul de streak de atunci). Null pentru rânduri
+    // completate înainte să existe coloana.
+    @Column(name = "xp_awarded")
+    private Integer xpAwarded;
+
+    // Dovada, ambele opționale: un text scurt și/sau numele fișierului din folderul uploads/.
+    @Column(name = "proof_text", length = Proof.MAX_TEXT_LENGTH)
+    private String proofText;
+
+    @Column(name = "proof_image_path", length = 100)
+    private String proofImagePath;
+
     // Blochează dublul "Completed" concurent (al doilea commit pică cu optimistic lock).
     @Version
     private long version;
@@ -81,14 +93,25 @@ public class QuestAssignment {
         return completedAt;
     }
 
+    public Integer getXpAwarded() {
+        return xpAwarded;
+    }
+
+    public Proof getProof() {
+        return new Proof(proofText, proofImagePath);
+    }
+
     public boolean isCompleted() {
         return completedAt != null;
     }
 
-    public void complete(Instant when) {
+    public void complete(Instant when, int xp, Proof proof) {
         if (isCompleted()) {
             throw new IllegalStateException("Quest-ul este deja completat");
         }
         this.completedAt = when;
+        this.xpAwarded = xp;
+        this.proofText = proof.text();
+        this.proofImagePath = proof.imagePath();
     }
 }

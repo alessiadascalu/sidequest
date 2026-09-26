@@ -20,4 +20,11 @@ public interface QuestAssignmentRepository extends JpaRepository<QuestAssignment
     List<Long> findAssignedQuestIds(@Param("userId") Long userId);
 
     long countByUserIdAndCompletedAtIsNotNull(Long userId);
+
+    /** Quest-urile completate, cele mai noi primele; quest-ul vine în același query (fără N+1). */
+    @Query("""
+            select a from QuestAssignment a join fetch a.quest join fetch a.user
+            where a.user.id = :userId and a.completedAt is not null
+            order by a.localDate desc, a.completedAt desc""")
+    List<QuestAssignment> findCompletedHistory(@Param("userId") Long userId);
 }

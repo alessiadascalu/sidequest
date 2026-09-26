@@ -1,6 +1,7 @@
+import { AnimatePresence, MotionConfig, motion } from 'framer-motion'
 import { useCallback, useState } from 'react'
-import Dashboard from './components/Dashboard.jsx'
-import Onboarding from './components/Onboarding.jsx'
+import Home from './components/Home.jsx'
+import Login from './components/Login.jsx'
 
 const STORAGE_KEY = 'sidequest.userId'
 
@@ -21,31 +22,57 @@ function storeUserId(id) {
   }
 }
 
-export default function App() {
-  const [userId, setUserId] = useState(readStoredUserId)
+function welcomeFor(login) {
+  if (login.created) return { emoji: '✨', text: `Bun venit, ${login.username}! Prima misiune te așteaptă.` }
+  const streak = login.streak.current
+  return streak > 0
+    ? { emoji: '🔥', text: `Bine ai revenit, ${login.username}! ${streak} ${streak === 1 ? 'zi' : 'zile'} la rând.` }
+    : { emoji: '👋', text: `Bine ai revenit, ${login.username}!` }
+}
 
-  const handleCreated = useCallback((id) => {
-    storeUserId(id)
-    setUserId(String(id))
+export default function App() {
+  // Sesiunea: id-ul salvat local + (după login) profilul primit direct de la POST /users.
+  const [session, setSession] = useState(() => {
+    const id = readStoredUserId()
+    return id ? { userId: id } : null
+  })
+
+  const handleLoggedIn = useCallback((login) => {
+    storeUserId(login.id)
+    setSession({ userId: String(login.id), profile: login, welcome: welcomeFor(login) })
   }, [])
 
-  const handleForget = useCallback(() => {
+  const handleLogout = useCallback(() => {
     storeUserId(null)
-    setUserId(null)
+    setSession(null)
   }, [])
 
   return (
-    <main className="app">
-      <header className="app-header">
-        <h1>SideQuest</h1>
-        <p className="muted">O mini-misiune pe zi.</p>
-      </header>
-
-      {userId ? (
-        <Dashboard userId={userId} onForget={handleForget} />
-      ) : (
-        <Onboarding onCreated={handleCreated} />
-      )}
-    </main>
+    // reducedMotion="user": animațiile se reduc dacă sistemul cere "reduce motion".
+    <MotionConfig reducedMotion="user">
+      <main className="app">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={session ? `home-${session.userId}` : 'login'}
+            // fără filter/transform rămase după animație: ar strica position: fixed al overlay-urilor
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -24 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+          >
+            {session ? (
+              <Home
+                userId={session.userId}
+                initialProfile={session.profile}
+                welcome={session.welcome}
+                onLogout={handleLogout}
+              />
+            ) : (
+              <Login onLoggedIn={handleLoggedIn} />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </main>
+    </MotionConfig>
   )
 }

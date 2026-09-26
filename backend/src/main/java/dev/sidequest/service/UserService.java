@@ -9,6 +9,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.time.ZoneId;
+import java.util.Optional;
 
 @Service
 public class UserService {
@@ -28,15 +29,24 @@ public class UserService {
         this.levelService = levelService;
     }
 
-    public User create(String username, ZoneId zoneId) {
+    /**
+     * "Login" fără parolă: dacă username-ul există (indiferent de majuscule), întoarce acel
+     * utilizator; altfel îl creează cu fusul orar dat. Pentru un utilizator existent fusul
+     * trimis e ignorat: zilele deja atribuite depind de fusul salvat.
+     */
+    public LoginResult loginOrCreate(String username, ZoneId zoneId) {
         String name = username.trim();
-        if (users.existsByUsernameIgnoreCase(name)) {
-            throw new ConflictException("Username-ul „" + name + "” e deja luat");
+        Optional<User> existing = users.findByUsernameIgnoreCase(name);
+        if (existing.isPresent()) {
+            return new LoginResult(existing.get(), false);
         }
         try {
-            return users.saveAndFlush(new User(name, zoneId));
+            return new LoginResult(users.saveAndFlush(new User(name, zoneId)), true);
         } catch (DataIntegrityViolationException raced) {
-            throw new ConflictException("Username-ul „" + name + "” e deja luat");
+            // Două cereri simultane cu același username nou: câștigătorul l-a creat, noi doar ne logăm.
+            return users.findByUsernameIgnoreCase(name)
+                    .map(user -> new LoginResult(user, false))
+                    .orElseThrow(() -> raced);
         }
     }
 

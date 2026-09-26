@@ -9,6 +9,9 @@ backend/data/
 *.mv.db
 *.trace.db
 
+# Pozele-dovadă urcate de utilizatori (create la runtime)
+backend/uploads/
+
 # Node / Vite
 node_modules/
 dist/
